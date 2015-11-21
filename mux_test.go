@@ -50,3 +50,28 @@ func TestServeMux(t *testing.T) {
 		}
 	}
 }
+
+var serveMuxBenchmark = struct {
+	method string
+	path   string
+}{
+	"GET",
+	"/foo/10",
+}
+
+func BenchmarkServeMux(b *testing.B) {
+	mux := NewServeMux()
+	for _, reg := range serveMuxRegisters {
+		mux.Handle(reg.pattern, reg.handler)
+	}
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			rr := httptest.NewRecorder()
+			method := serveMuxBenchmark.method
+			url := "http://www.example.com" + serveMuxBenchmark.path
+			req, _ := http.NewRequest(method, url, nil)
+			mux.ServeHTTP(rr, req)
+			var _ = FromRequest(req)
+		}
+	})
+}
