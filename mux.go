@@ -7,12 +7,13 @@ import (
 	"regexp"
 	"regexp/syntax"
 	"sync"
+	"path"
 )
 
 type Placeholder map[string]string
 
-func matchRequest(re *regexp.Regexp, req *http.Request) (bool, Placeholder) {
-	switch matches := re.FindStringSubmatch(req.URL.Path); len(matches) {
+func matchPath(re *regexp.Regexp, path string) (bool, Placeholder) {
+	switch matches := re.FindStringSubmatch(path); len(matches) {
 	case 0:
 		return false, nil
 	case 1:
@@ -46,7 +47,24 @@ type ServeMux struct {
 	mu       sync.RWMutex
 }
 
+func cleanPath(p string) string {
+	if p == "" {
+		p = "/" + p
+	}
+	np := path.Clean(p)
+	if p[len(p)-1] == '/' && p != "/" {
+		np += "/"
+	}
+	return np
+}
+
 func (mux *ServeMux) Handle(pattern string, handler http.Handler) {
+	if pattern == "" {
+		panic("mux: empty pattern")
+	}
+	if handler == nil {
+		panic("mux: nil handler")
+	}
 	mux.mu.Lock()
 	for re, _ := range mux.handlers {
 		if re.String() == pattern {
@@ -62,9 +80,21 @@ func (mux *ServeMux) HandleFunc(pattern string, f func(http.ResponseWriter, *htt
 }
 
 func (mux *ServeMux) Handler(req *http.Request) (http.Handler, string, Placeholder) {
+	if req.Method != "CONNECT" {
+		if path := cleanPath(req.URL.Path); path != req.URL.Path {
+			_, pattern, placeholder := mux.handler(path)
+			u := req.URL
+			u.Path = path
+			return http.RedirectHandler((*u).String(), http.StatusMovedPermanently), pattern, placeholder
+		}
+	}
+	return mux.handler(req.URL.Path)
+}
+
+func (mux *ServeMux) handler(path string) (http.Handler, string, Placeholder) {
 	mux.mu.RLock()
 	for re, handler := range mux.handlers {
-		if ok, placeholder := matchRequest(re, req); ok {
+		if ok, placeholder := matchPath(re, path); ok {
 			return handler, re.String(), placeholder
 		}
 	}

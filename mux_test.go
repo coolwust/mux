@@ -31,6 +31,9 @@ var serveMuxTests = []struct {
 	{"GET", "/", 404, nil},
 	{"GET", "/foo", 200, nil},
 	{"GET", "/foo/10", 200, Placeholder{"bar": "10"}},
+	{"GET", "/foo/20/../10", http.StatusMovedPermanently, Placeholder{"bar": "10"}},
+
+	{"CONNECT", "/foo/20/../10", http.StatusNotFound, nil},
 }
 
 func TestServeMux(t *testing.T) {
