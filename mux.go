@@ -47,6 +47,7 @@ type ServeMux struct {
 	mu       sync.RWMutex
 }
 
+// the function prevents pathname attack such as /public/../your_secret
 func cleanPath(p string) string {
 	if p == "" {
 		p = "/" + p
